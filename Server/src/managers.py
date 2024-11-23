@@ -1,7 +1,7 @@
 import logging
 from typing import TypeVar
 from fastapi import WebSocket
-from src.contracts import CarSignal, CarTelemetry, pack, unpack
+from src.contracts import pack, unpack
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -27,7 +27,7 @@ class WebsocketManager:
         bytes_data = await websocket.receive_bytes()
         return unpack(bytes_data, expect_data_type)
     
-    async def send(self, object_id: str, structure: T) -> None:
-        data = pack(structure)
+    async def send(self, object_id: str, contract: T) -> None:
+        data = pack(contract)
         websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
