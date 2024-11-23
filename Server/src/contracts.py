@@ -70,8 +70,8 @@ def _pack_car_telemetry(car_telemetry: CarTelemetry) -> bytes:
     # Упаковываем power как 4-байтовое целое число (int)
     power_packed = struct.pack("i", car_telemetry.power)
 
-    # Упаковываем id: длина строки + сама строка (байты)
-    name_bytes = car_telemetry.id.encode("utf-8")
+    # Упаковываем name: длина строки + сама строка (байты)
+    name_bytes = car_telemetry.name.encode("utf-8")
     name_length = len(name_bytes)
     name_packed = struct.pack("I", name_length) + name_bytes
 
@@ -204,9 +204,9 @@ def repack(data: T, new_type: type[N]) -> N:
     if isinstance(data, CarTelemetry) and new_type is ClientTelemetry:
         return ClientTelemetry(
             frame=data.frame, 
-            battery=data.frame * BATTERY_MULTIPLIER, 
-            speed=data.speed * SPEED_MULTIPLIER,
-            power=data.speed * SPEED_MULTIPLIER,
+            battery=data.battery / BATTERY_MULTIPLIER, 
+            speed=data.speed / SPEED_MULTIPLIER,
+            power=data.power / SPEED_MULTIPLIER,
             name=data.name
         )
     elif isinstance(data, ClientSignal) and new_type is CarSignal:
@@ -219,6 +219,6 @@ def repack(data: T, new_type: type[N]) -> N:
         raise ValueError(
             f"Forbidden repack: {type(data)} to {new_type}"
             "\nIt can only be:"
-            "\CarTelemetry -> ClientTelemetry"
-            "\ClientSignal -> CarSignal"
+            "\nCarTelemetry -> ClientTelemetry"
+            "\nClientSignal -> CarSignal"
         )
