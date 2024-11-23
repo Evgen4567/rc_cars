@@ -107,7 +107,7 @@ def _unpack_client_telemetry(data: bytes) -> ClientTelemetry:
     _check_type(battery, float)
     _check_type(speed, float)
     _check_type(power, float)
-    _check_type(name, float)
+    _check_type(name, str)
     return ClientTelemetry(frame=frame, battery=battery, speed=speed, power=power, name=name)
 
 def _pack_client_telemetry(client_telemetry: ClientTelemetry) -> bytes:
