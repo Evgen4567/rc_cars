@@ -14,11 +14,14 @@ html = Path("src/client.html").read_text()
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager()
-transfer_manager = TransferManager(car_manager=car_manager, client_manager=client_manager)
+transfer_manager = TransferManager(
+    car_manager=car_manager, 
+    client_manager=client_manager,
+    signals_sleep=0.000001,
+    telemetry_sleeps=0.000001
+)
 background_tasks = set()
 SLEEP_UPDATE_CARS_TIME = 1.0
-SIGNALS_SEND_SLEEP = 0.000001
-TELEMETRY_SEND_SLEEP = 0.000001
 
 async def update_cars_loop() -> None:
     while True:
@@ -29,12 +32,10 @@ async def update_cars_loop() -> None:
 async def handle_signals_loop() -> None:
     while True:
         await transfer_manager.handle_signals()
-        await asyncio.sleep(SIGNALS_SEND_SLEEP)
 
 async def handle_telemetry_loop() -> None:
     while True:
         await transfer_manager.handle_telemetry()
-        await asyncio.sleep(TELEMETRY_SEND_SLEEP)
 
 def add_loop_task(func: Callable) -> None:
     task = asyncio.create_task(func())
