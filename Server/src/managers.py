@@ -1,33 +1,33 @@
 import logging
+from typing import TypeVar
 from fastapi import WebSocket
 from src.contracts import CarSignal, CarTelemetry, pack, unpack
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
-class CarManager:
+class WebsocketManager:
     def __init__(self) -> None:
         self.active_connections: dict[str, WebSocket] = {}
-    
-    async def connect(self, websocket: WebSocket, car_id: str):
-        # TODO validate that car is our car
-        await websocket.accept()
-        self.active_connections[car_id] = websocket
 
-    def disconnect(self, car_id: str):
-        del self.active_connections[car_id]
-
-    def _get_car_websocket(self, car_id: str) -> WebSocket:
-        if not (websocket := self.active_connections.get(car_id)):
-            raise Exception("WTF: where is car websocket?")
+    def _get_object_websocket(self, object_id: str) -> WebSocket:
+        if not (websocket := self.active_connections.get(object_id)):
+            raise Exception(f"WTF: where is {object_id=} websocket?")
         return websocket
-    
-    async def receive_telemetry(self, car_id: str) -> CarTelemetry:
-        websocket = self._get_car_websocket(car_id)
+
+    async def connect(self, websocket: WebSocket, object_id: str):
+        await websocket.accept()
+        self.active_connections[object_id] = websocket
+
+    def disconnect(self, object_id: str):
+        del self.active_connections[object_id]
+
+    async def receive(self, object_id: str, expect_data_type: type[T]) -> T:
+        websocket = self._get_object_websocket(object_id)
         bytes_data = await websocket.receive_bytes()
-        telemetry = unpack(bytes_data, CarTelemetry)
-        return telemetry
+        return unpack(bytes_data, expect_data_type)
     
-    async def send_signal(self, car_id: str, car_signal: CarSignal) -> None:
-        data = pack(car_signal)
-        websocket = self._get_car_websocket(car_id)
+    async def send(self, object_id: str, structure: T) -> None:
+        data = pack(structure)
+        websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
