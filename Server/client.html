@@ -1,8 +1,204 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Client</title>
-    </head>
-    <body>
-    </body>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Potentiometer Simulation</title>
+<style>
+    body, html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden; /* Скрытие полос прокрутки */
+    }
+    .container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+    }
+    /* Добавляем стили для увеличения размера бегунков */
+    input[type="range"].meter {
+        width: 20%;
+        margin-top: 15%;
+        transform: scale(4); 
+    }
+    input[type="range"].sensitivity {
+        height: 10%;
+        margin-top: 90%;
+        margin-right: 35%;
+        transform: scale(4); 
+    }
+    .wrapper_rotate{
+        transform: rotate(90deg);
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <table>
+        <tr>
+            <input 
+            id="rw"
+            type="range" 
+            class="meter" 
+            value="0" 
+            min="-200" 
+            max="255"
+            onchange="setDefaultValue(this.id)"
+            oninput="this.nextElementSibling.value = this.value">
+            <output id="rw_output" class='wrapper_rotate'>0</output>
+        </tr>
+        <tr>
+            <input
+            id="fw"
+            type="range" 
+            class="sensitivity" 
+            value="0" 
+            min="-255" 
+            max="255" 
+            orient="vertical" 
+            onchange="setDefaultValue(this.id)"
+            oninput="this.nextElementSibling.value = this.value"
+            style="-webkit-appearance: slider-vertical;"/>
+            <output id="fw_output" class='wrapper_rotate'>0</output>
+        </tr>
+    </table>
+</div>
+<script>
+    var socket = new WebSocket('ws://192.168.71.1/ws/control');
+    var values = {
+        rw_in1_duty: 0,
+        rw_in2_duty: 0,
+        fw_in1_duty: 0,
+        fw_in2_duty: 0
+    };
+
+    function sendValuesToServer(value) {
+        var data = JSON.stringify(values)
+        console.log(data);
+        socket.send(data);
+    }
+
+    function setDefaultValue(input_id) {
+        document.getElementById(input_id).value = 0;
+        if (input_id === "rw") {
+            values.rw_in1_duty = 0;
+            values.rw_in2_duty = 0;
+            document.getElementById("rw_output").value = 0;
+        }
+        else {
+            values.fw_in1_duty = 0;
+            values.fw_in2_duty = 0;
+            document.getElementById("fw_output").value = 0;
+        }
+        
+        sendValuesToServer();
+    }
+
+    function handleRangeInput() {
+        var rwValue = parseInt(document.getElementById('rw').value);
+        var fwValue = parseInt(document.getElementById('fw').value);
+
+        // Обработка значения для элемента rw
+        if (rwValue > 0) {
+            values.rw_in1_duty = Math.max(Math.abs(rwValue), 125);
+            values.rw_in2_duty = 0;
+        } else if (rwValue < 0) {
+            var value = Math.max(Math.abs(rwValue), 125)
+            values.rw_in1_duty = 0;
+            values.rw_in2_duty = value;
+        } else {
+            values.rw_in1_duty = 0;
+            values.rw_in2_duty = 0;
+        }
+
+        // Обработка значения для элемента fw
+        if (fwValue < -175) {
+            values.fw_in1_duty = 255;
+            values.fw_in2_duty = 0;
+        } else if (fwValue > 175) {
+            values.fw_in1_duty = 0;
+            values.fw_in2_duty = 255;
+        } else {
+            values.fw_in1_duty = 0;
+            values.fw_in2_duty = 0;
+        }
+
+        sendValuesToServer();
+    }
+
+    var rwSlider = document.getElementById('rw');
+    var fwSlider = document.getElementById('fw');
+
+
+    rwSlider.addEventListener('input', handleRangeInput);
+    fwSlider.addEventListener('input', handleRangeInput);
+
+    // gamepad
+    const rAF = window.mozRequestAnimationFrame || window.requestAnimationFrame;
+
+    function handleGamepadInput(rw_value, fw_value) {
+        var rw_rounded = Math.round(rw_value * -100) + 1;
+        var fw_rounded = Math.round(fw_value * -100) + 1;
+        
+        var rw_pwm = 0;
+        var fw_pwm = 0;
+        // Обработка значения для элемента rw
+        if (rw_rounded > 2) {
+            rw_pwm = Math.min(rw_rounded + 155, 255);
+            values.rw_in1_duty = rw_pwm;
+            values.rw_in2_duty = 0;
+        } else if (rw_rounded < -2) {
+            rw_pwm = Math.min(Math.abs(rw_rounded) + 150, 200);
+            values.rw_in1_duty = 0;
+            values.rw_in2_duty = rw_pwm;
+        } else {
+            values.rw_in1_duty = 0;
+            values.rw_in2_duty = 0;
+        }
+
+        // Обработка значения для элемента fw
+        if (fw_rounded < -2) {
+            fw_pwm = Math.min(Math.abs(fw_rounded)  + 155, 255);
+            values.fw_in1_duty = fw_pwm;
+            values.fw_in2_duty = 0;
+        } else if (fw_rounded > 2) {
+            fw_pwm = Math.min(fw_rounded + 155, 255);
+            values.fw_in1_duty = 0;
+            values.fw_in2_duty = fw_pwm;
+        } else {
+            values.fw_in1_duty = 0;
+            values.fw_in2_duty = 0;
+        }
+        document.getElementById("rw_output").value = rw_pwm;
+        document.getElementById("fw_output").value = fw_pwm;
+        sendValuesToServer();
+    }
+
+    window.addEventListener('gamepadconnected', function(event) {
+        console.log(event);
+        updateLoop();
+    }); 
+
+    function updateLoop() {
+        var gp = null;
+        let gp_list = navigator.getGamepads();
+        for ( let idx = 0; idx < gp_list.length; idx++){
+            if (gp_list[idx]) {
+                gp = navigator.getGamepads()[0];
+            }
+        }
+        if (gp) {
+            let gp = navigator.getGamepads()[0];
+            handleGamepadInput(gp.axes[1], gp.axes[2]);
+        }
+        setTimeout(function () {
+            rAF(updateLoop);
+        }, 50);
+    }
+</script>
+</body>
 </html>
