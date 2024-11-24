@@ -13,15 +13,13 @@ logger = logging.getLogger(__name__)
 html = Path("client.html").read_text()
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
-car_pool_manager = CarPoolManager()
+car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
 background_tasks = set()
-SLEEP_UPDATE_CARS_TIME = 1.0
 
 async def update_cars_loop() -> None:
     while True:
         all_cars_ids = list(car_manager.active_connections.keys())
-        car_pool_manager.update_available_cars(all_cars_ids)
-        await asyncio.sleep(SLEEP_UPDATE_CARS_TIME)
+        await car_pool_manager.update_available_cars(all_cars_ids)
 
 def add_loop_task(func: Callable) -> None:
     task = asyncio.create_task(func())

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TypeVar
 from fastapi import WebSocket
@@ -33,9 +34,10 @@ class WebsocketManager:
         await websocket.send_bytes(data)
 
 class CarPoolManager:
-    def __init__(self):
+    def __init__(self, sleep_update_cars_seconds: float):
         self.car_owner_pool: dict[str, str | None] = {}
         self.owner_car_pool: dict[str, str] = {}
+        self.sleep_update_cars_seconds = sleep_update_cars_seconds
 
     def add_car(self, car_id: str, owner_id: str | None = None):
         """Добавить новую машину в пул. Если нет владельца, то она свободна."""
@@ -66,7 +68,7 @@ class CarPoolManager:
         """Получить список свободных машин (где нет владельца)."""
         return [car_id for car_id, owner_id in self.car_owner_pool.items() if owner_id is None]
 
-    def update_available_cars(self, external_car_list: list[str]):
+    async def update_available_cars(self, external_car_list: list[str]):
         """Обновить список доступных машин из внешнего источника."""
         for car_id in external_car_list:
             if car_id not in self.car_owner_pool:
@@ -75,3 +77,4 @@ class CarPoolManager:
         for car_id in car_pool:
             if car_id not in external_car_list:
                 del self.car_owner_pool[car_id]
+        await asyncio.sleep(self.sleep_update_cars_seconds)
