@@ -41,6 +41,10 @@ app = FastAPI(lifespan=lifespan)
 async def get():
     return HTMLResponse(html)
 
+@app.get("/car_pool")
+async def car_pool() -> dict[str, str | None]:
+    return car_pool_manager.car_owner_pool
+
 
 @app.websocket("/car/{car_id}")
 async def websocket_endpoint(websocket: WebSocket, car_id: str):
