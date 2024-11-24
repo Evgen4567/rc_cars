@@ -10,7 +10,7 @@ from src.managers import WebsocketManager, CarPoolManager
 from src.contracts import CarSignal, CarTelemetry, ClientSignal, ClientTelemetry, repack
 
 logger = logging.getLogger(__name__)
-html = Path("client.html").read_text()
+html = (Path(__file__).parent.parent / "client.html").read_text()
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
