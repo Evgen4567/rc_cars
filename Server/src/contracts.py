@@ -44,7 +44,7 @@ def _unpack_car_telemetry(data: bytes) -> CarTelemetry:
         power, data = _unpack_data("h", INT16_OFFSET, data)
 
         # Имя - любое число байтов
-        name_length, data = _unpack_data("I", INT16_OFFSET, data)
+        name_length, data = _unpack_data("h", INT16_OFFSET, data)
         name = data[:name_length].decode("utf-8")
     except struct.error as e:
         msg = "Invalid format of car telemetry packet"
