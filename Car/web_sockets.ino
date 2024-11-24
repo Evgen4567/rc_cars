@@ -1,6 +1,9 @@
 bool isConnected = false;
 
 void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
+  Serial.print("type: ");
+  Serial.println(type);
+  
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("WebSocket отключён");
