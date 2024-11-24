@@ -19,7 +19,7 @@ async def send_messages(websocket, object_id):
     while True:
         msg = generate_signal()
         await websocket.send(msg)
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.0001)
 
 async def main():
     client_id = "fake_client"

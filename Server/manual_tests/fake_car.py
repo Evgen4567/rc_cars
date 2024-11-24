@@ -21,7 +21,7 @@ async def send_messages(websocket, car_id):
     while True:
         msg = generate_telemetry(car_id)
         await websocket.send(msg)
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.0001)
 
 async def main():
     car_id = "fake_car"
