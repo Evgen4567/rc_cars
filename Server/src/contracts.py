@@ -8,6 +8,7 @@ BATTERY_MULTIPLIER = 100
 SPEED_MULTIPLIER = 100
 INT16_OFFSET = 2
 INT32_OFFSET = 4
+FLOAT32_OFFSET = 4
 
 # Телеметрия идет Car -> Server -> Client
 CarTelemetry = namedtuple('CarTelemetry', ["frame", "battery", "speed", "power", "name"])
@@ -33,18 +34,17 @@ def _check_type(data: T, expect_type: type[T]) -> None:
 
 def _unpack_car_telemetry(data: bytes) -> CarTelemetry:
     try:
-        # Распаковываем frame
+        # Картинка - любое число байтов
         frame_length, data = _unpack_data("I", INT32_OFFSET, data)
         frame = data[:frame_length]
         data = data[frame_length:]
-        # Распаковываем battery
+
         battery, data = _unpack_data("h", INT16_OFFSET, data)
-        # Распаковываем speed
         speed, data = _unpack_data("h", INT16_OFFSET, data)
-        # Распаковываем power
         power, data = _unpack_data("h", INT16_OFFSET, data)
-        # Распаковываем name
-        name_length, data = _unpack_data("I", INT32_OFFSET, data)
+
+        # Имя - любое число байтов
+        name_length, data = _unpack_data("I", INT16_OFFSET, data)
         name = data[:name_length].decode("utf-8")
     except struct.error as e:
         msg = "Invalid format of car telemetry packet"
@@ -58,48 +58,34 @@ def _unpack_car_telemetry(data: bytes) -> CarTelemetry:
     return CarTelemetry(frame=frame, battery=battery, speed=speed, power=power, name=name)
 
 def _pack_car_telemetry(car_telemetry: CarTelemetry) -> bytes:
-    # Упаковываем frame: длина кадра + сам кадр (байты)
+    # Объекты без фиксированной длины
     frame_length = len(car_telemetry.frame)
     frame_packed = struct.pack("I", frame_length) + car_telemetry.frame
-
-    # Упаковываем battery как 4-байтовое целое число (int)
-    battery_packed = struct.pack("h", car_telemetry.battery)
-
-    # Упаковываем speed как 4-байтовое целое число (int)
-    speed_packed = struct.pack("h", car_telemetry.speed)
-
-    # Упаковываем power как 4-байтовое целое число (int)
-    power_packed = struct.pack("h", car_telemetry.power)
-
-    # Упаковываем name: длина строки + сама строка (байты)
     name_bytes = car_telemetry.name.encode("utf-8")
     name_length = len(name_bytes)
-    name_packed = struct.pack("I", name_length) + name_bytes
+    name_packed = struct.pack("h", name_length) + name_bytes
 
-    # Объединяем все в один байтовый объект
+    # int16
+    battery_packed = struct.pack("h", car_telemetry.battery)
+    speed_packed = struct.pack("h", car_telemetry.speed)
+    power_packed = struct.pack("h", car_telemetry.power)
     return frame_packed + battery_packed + speed_packed + power_packed + name_packed
 
 def _unpack_client_telemetry(data: bytes) -> ClientTelemetry:
-    offset = 0
     try:
-        # Распаковываем длину кадра и сам кадр
-        frame_length = struct.unpack("I", data[offset:offset + 4])[0]
-        offset += 4
-        frame = data[offset:offset + frame_length]
-        offset += frame_length
+        # Картинка - любое число байтов
+        frame_length, data = _unpack_data("I", INT32_OFFSET, data)
+        frame = data[:frame_length]
+        data = data[frame_length:]
         
-        # Распаковываем другие данные
-        battery = struct.unpack("f", data[offset:offset + 4])[0]
-        offset += 4
-        speed = struct.unpack("f", data[offset:offset + 4])[0]
-        offset += 4
-        power = struct.unpack("f", data[offset:offset + 4])[0]
-        offset += 4
+        # float32
+        battery, data = _unpack_data("f", FLOAT32_OFFSET, data)
+        speed, data = _unpack_data("f", FLOAT32_OFFSET, data)
+        power, data = _unpack_data("f", FLOAT32_OFFSET, data)
         
-        # Распаковываем длину имени и само имя
-        name_length = struct.unpack("I", data[offset:offset + 4])[0]
-        offset += 4
-        name = data[offset:offset + name_length].decode("utf-8")
+        # Имя - любое число байтов
+        name_length, data = _unpack_data("h", INT16_OFFSET, data)
+        name = data[:name_length].decode("utf-8")
 
     except struct.error as e:
         msg = "Invalid format of telemetry packet"
@@ -112,67 +98,47 @@ def _unpack_client_telemetry(data: bytes) -> ClientTelemetry:
     return ClientTelemetry(frame=frame, battery=battery, speed=speed, power=power, name=name)
 
 def _pack_client_telemetry(client_telemetry: ClientTelemetry) -> bytes:
-    # Упаковываем frame: длина кадра + сам кадр (байты)
+    # Объекты без фиксированной длины
     frame_length = len(client_telemetry.frame)
     frame_packed = struct.pack("I", frame_length) + client_telemetry.frame
 
-    # Упаковываем battery как 4-байтовое целое число (int)
+    # float32
     battery_packed = struct.pack("f", client_telemetry.battery)
-
-    # Упаковываем speed как 4-байтовое целое число (int)
     speed_packed = struct.pack("f", client_telemetry.speed)
-
-    # Упаковываем power как 4-байтовое целое число (int)
     power_packed = struct.pack("f", client_telemetry.power)
 
-    # Упаковываем id: длина строки + сама строка (байты)
+    # Упаковываем name
     name_bytes = client_telemetry.name.encode("utf-8")
     name_length = len(client_telemetry.name)
-    name_packed = struct.pack("I", name_length) + name_bytes
+    name_packed = struct.pack("h", name_length) + name_bytes
 
     # Объединяем все в один байтовый объект
     return frame_packed + battery_packed + speed_packed + power_packed + name_packed
 
 def _unpack_car_signal(data: bytes) -> CarSignal:
-    # Распаковываем moving, power и direction как 4-байтовые целые числа
-    moving = struct.unpack("i", data[:4])[0]
-    power = struct.unpack("i", data[4:8])[0]
-    direction = struct.unpack("i", data[8:12])[0]
-    
+    moving, data = _unpack_data("h", INT16_OFFSET, data)
+    power, data = _unpack_data("h", INT16_OFFSET, data)
+    direction, data = _unpack_data("h", INT16_OFFSET, data)    
     return CarSignal(moving=moving, power=power, direction=direction)
 
 def _pack_car_signal(car_signal: CarSignal) -> bytes:
-    # Упаковываем moving как 4-байтовое целое число (int)
-    moving_bytes = struct.pack("i", car_signal.moving)
-
-    # Упаковываем power как 4-байтовое целое число (int)
-    power_bytes = struct.pack("i", car_signal.power)
-
-    # Упаковываем direction как 4-байтовое целое число (int)
-    direction_bytes = struct.pack("i", car_signal.direction)
-
-    # Объединяем все в один байтовый объект
+    # int16
+    moving_bytes = struct.pack("h", car_signal.moving)
+    power_bytes = struct.pack("h", car_signal.power)
+    direction_bytes = struct.pack("h", car_signal.direction)
     return moving_bytes + power_bytes + direction_bytes
 
 def _unpack_client_signal(data: bytes) -> ClientSignal:
-    # Распаковываем moving, power и direction как 4-байтовые целые числа
-    moving = struct.unpack("i", data[:4])[0]
-    power = struct.unpack("i", data[4:8])[0]
-    direction = struct.unpack("i", data[8:12])[0]
-    
+    moving, data = _unpack_data("h", INT16_OFFSET, data)
+    power, data = _unpack_data("h", INT16_OFFSET, data)
+    direction, data = _unpack_data("h", INT16_OFFSET, data)
     return ClientSignal(moving=moving, power=power, direction=direction)
 
 def _pack_client_signal(client_signal: ClientSignal) -> bytes:
-    # Упаковываем moving как 4-байтовое целое число (int)
-    moving_bytes = struct.pack("i", client_signal.moving)
-
-    # Упаковываем power как 4-байтовое целое число (int)
-    power_bytes = struct.pack("i", client_signal.power)
-
-    # Упаковываем direction как 4-байтовое целое число (int)
-    direction_bytes = struct.pack("i", client_signal.direction)
-
-    # Объединяем все в один байтовый объект
+    # int16
+    moving_bytes = struct.pack("h", client_signal.moving)
+    power_bytes = struct.pack("h", client_signal.power)
+    direction_bytes = struct.pack("h", client_signal.direction)
     return moving_bytes + power_bytes + direction_bytes
 
 def unpack(data: bytes, data_type: type[T]) -> T:
