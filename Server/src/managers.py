@@ -1,9 +1,7 @@
-import asyncio
 import logging
 from typing import TypeVar
 from fastapi import WebSocket
-from src.contracts import pack, unpack, CarSignal, ClientTelemetry
-from asyncio import Queue, QueueEmpty
+from src.contracts import pack, unpack
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -77,43 +75,3 @@ class CarPoolManager:
         for car_id in car_pool:
             if car_id not in external_car_list:
                 del self.car_owner_pool[car_id]
-
-
-class TransferManager:
-    def __init__(
-        self, 
-        car_manager: WebsocketManager, 
-        client_manager: WebsocketManager, 
-        signals_sleep: float, 
-        telemetry_sleeps: float
-    ) -> None:
-        self._signals_queue = Queue()
-        self._telemetry_queue = Queue()
-        self.car_manager = car_manager
-        self.client_manager = client_manager
-        self.signals_send_sleep_seconds = signals_sleep
-        self.telemetry_send_sleep_seconds = telemetry_sleeps
-
-    async def add_signal(self, signal: CarSignal, car_id: str) -> None:
-        await self._signals_queue.put((signal, car_id))
-
-    async def add_telemetry(self, telemetry: ClientTelemetry, client_id: str) -> None:
-        await self._telemetry_queue.put((telemetry, client_id))
-
-    async def handle_signals(self) -> None:
-        try:
-            signal_packet: tuple[CarSignal, str] = self._signals_queue.get_nowait()
-        except QueueEmpty:
-            await asyncio.sleep(self.signals_send_sleep_seconds)
-            return
-        signal, car_id = signal_packet
-        await self.car_manager.send(car_id, signal)
-        
-    async def handle_telemetry(self) -> None:
-        try:
-            signal_packet: tuple[ClientTelemetry, str] = self._telemetry_queue.get_nowait()
-        except QueueEmpty:
-            await asyncio.sleep(self.telemetry_send_sleep_seconds)
-            return
-        telemetry, client_id = signal_packet
-        await self.client_manager.send(client_id, telemetry)
