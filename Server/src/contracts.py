@@ -1,11 +1,13 @@
 from collections import namedtuple
 import logging
 import struct
-from typing import TypeVar
+from typing import Any, Literal, TypeVar
 
 logger = logging.getLogger(__name__)
 BATTERY_MULTIPLIER = 100
 SPEED_MULTIPLIER = 100
+INT16_OFFSET = 2
+INT32_OFFSET = 4
 
 # Телеметрия идет Car -> Server -> Client
 CarTelemetry = namedtuple('CarTelemetry', ["frame", "battery", "speed", "power", "name"])
@@ -18,6 +20,11 @@ ClientSignal = namedtuple('ClientSignal', ["moving", "power", "direction"])
 T = TypeVar("T")
 N = TypeVar("N")
 
+def _unpack_data(fmt: Literal["I", "h", "f", "i"], size: int, data: bytes) -> tuple[Any, bytes]:
+    value = struct.unpack(fmt, data[:size])[0]
+    new_data = data[size:]
+    return value, new_data
+
 def _check_type(data: T, expect_type: type[T]) -> None:
     if not isinstance(data, expect_type):
         msg = f"Invalid data type: type={type(data)}, expect={expect_type}, {data=}"
@@ -25,26 +32,20 @@ def _check_type(data: T, expect_type: type[T]) -> None:
         raise TypeError(msg)
 
 def _unpack_car_telemetry(data: bytes) -> CarTelemetry:
-    offset = 0
     try:
         # Распаковываем frame
-        frame_length = struct.unpack("I", data[offset:offset + 4])[0]
-        offset += 4
-        frame = data[offset:offset + frame_length]
-        offset += frame_length
+        frame_length, data = _unpack_data("I", INT32_OFFSET, data)
+        frame = data[:frame_length]
+        data = data[frame_length:]
         # Распаковываем battery
-        battery = struct.unpack("i", data[offset:offset + 4])[0]
-        offset += 4
+        battery, data = _unpack_data("h", INT16_OFFSET, data)
         # Распаковываем speed
-        speed = struct.unpack("i", data[offset:offset + 4])[0]
-        offset += 4
+        speed, data = _unpack_data("h", INT16_OFFSET, data)
         # Распаковываем power
-        power = struct.unpack("i", data[offset:offset + 4])[0]
-        offset += 4
-        # Распаковываем id
-        name_length = struct.unpack("I", data[offset:offset + 4])[0]
-        offset += 4
-        name = data[offset:offset + name_length].decode("utf-8")
+        power, data = _unpack_data("h", INT16_OFFSET, data)
+        # Распаковываем name
+        name_length, data = _unpack_data("I", INT32_OFFSET, data)
+        name = data[:name_length].decode("utf-8")
     except struct.error as e:
         msg = "Invalid format of car telemetry packet"
         raise ValueError(msg) from e
@@ -62,13 +63,13 @@ def _pack_car_telemetry(car_telemetry: CarTelemetry) -> bytes:
     frame_packed = struct.pack("I", frame_length) + car_telemetry.frame
 
     # Упаковываем battery как 4-байтовое целое число (int)
-    battery_packed = struct.pack("i", car_telemetry.battery)
+    battery_packed = struct.pack("h", car_telemetry.battery)
 
     # Упаковываем speed как 4-байтовое целое число (int)
-    speed_packed = struct.pack("i", car_telemetry.speed)
+    speed_packed = struct.pack("h", car_telemetry.speed)
 
     # Упаковываем power как 4-байтовое целое число (int)
-    power_packed = struct.pack("i", car_telemetry.power)
+    power_packed = struct.pack("h", car_telemetry.power)
 
     # Упаковываем name: длина строки + сама строка (байты)
     name_bytes = car_telemetry.name.encode("utf-8")
