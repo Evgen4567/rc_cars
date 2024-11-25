@@ -7,6 +7,15 @@
 #include <EEPROM.h>
 
 
+#define PIN_SPEED 4 // Вывод управления скоростью вращения мотора №1
+//#define PIN_ENA 16 // Вывод управления скоростью вращения мотора №1
+#define PIN_ENB 2 // Вывод управления скоростью вращения мотора №2
+#define PIN_IN3 14 // Вывод управления направлением вращения мотора №1
+#define PIN_IN4 15 // Вывод управления направлением вращения мотора №1
+//#define PIN_IN3 13 // Вывод управления направлением вращения мотора №2
+//#define PIN_IN4 12 // Вывод управления направлением вращения мотора №2
+
+
 #define CAR_NAME_SIZE 10
 #define SSID_MAX_LENGTH 32
 #define PASSWORD_MAX_LENGTH 32
@@ -35,6 +44,66 @@ CarTelemetry car_telemetry;
 
 void setup() {
   Serial.begin(115200);
+
+  pinMode(PIN_SPEED, INPUT);
+  pinMode(PIN_ENA, OUTPUT);
+  pinMode(PIN_ENB, OUTPUT);
+  pinMode(PIN_IN3, OUTPUT);
+  pinMode(PIN_IN4, OUTPUT);
+  pinMode(PIN_IN3, OUTPUT);
+  pinMode(PIN_IN4, OUTPUT);
+
+  Serial.println("Вперед:");
+  digitalWrite(PIN_IN3, LOW);
+  digitalWrite(PIN_IN4, HIGH);
+  analogWrite(PIN_ENB, 250);
+  delay(3000);
+  Serial.println("Назад:");
+  digitalWrite(PIN_IN3, HIGH);
+  digitalWrite(PIN_IN4, LOW);
+  analogWrite(PIN_ENB, 250);
+  delay(3000);
+  Serial.println("Вперед:");
+  digitalWrite(PIN_IN3, LOW);
+  digitalWrite(PIN_IN4, HIGH);
+  analogWrite(PIN_ENB, 250);
+  delay(3000);
+  Serial.println("Назад:");
+  digitalWrite(PIN_IN3, HIGH);
+  digitalWrite(PIN_IN4, LOW);
+  analogWrite(PIN_ENB, 250);
+  delay(3000);
+  Serial.println("Стоп нахуй:");
+  analogWrite(PIN_ENB, 0);
+  digitalWrite(PIN_IN3, LOW);
+  digitalWrite(PIN_IN4, LOW);
+  delay(3000);
+
+  Serial.println("Влево:");
+  digitalWrite(PIN_IN1, LOW);
+  digitalWrite(PIN_IN2, HIGH);
+  analogWrite(PIN_ENA, 250);
+  delay(3000);
+  Serial.println("Вправо:");
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
+  analogWrite(PIN_ENA, 250);
+  delay(3000);
+  Serial.println("Влево:");
+  digitalWrite(PIN_IN1, LOW);
+  digitalWrite(PIN_IN2, HIGH);
+  analogWrite(PIN_ENB, 250);
+  delay(3000);
+  Serial.println("Вправо:");
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
+  analogWrite(PIN_ENA, 250);
+  delay(3000);
+  Serial.println("Стоп нахуй:");
+  analogWrite(PIN_ENA, 0);
+  digitalWrite(PIN_IN1, LOW);
+  digitalWrite(PIN_IN2, LOW);
+  delay(3000);
 
   if (!readEeprom()) {
     snprintf(data.car_name, CAR_NAME_SIZE, "car_%04d", random(1, 9999));
@@ -70,7 +139,7 @@ void sendFrame() {
   size_t frame_length = fb->len;
   size_t name_length = strlen(data.car_name);
 
-  size_t total_size = 4 + frame_length + 4 + 4 + 4 + 4 + name_length;
+  size_t total_size = 4 + frame_length + 2 + 2 + 2 + 2 + name_length;
   uint8_t* buffer = new uint8_t[total_size];
 
   uint8_t* ptr = buffer;
@@ -82,16 +151,16 @@ void sendFrame() {
   ptr += frame_length;
 
   *((uint32_t*)ptr) = car_telemetry.battery;
-  ptr += 4;
+  ptr += 2;
 
   *((uint32_t*)ptr) = car_telemetry.speed;
-  ptr += 4;
+  ptr += 2;
 
   *((uint32_t*)ptr) = car_telemetry.power;
-  ptr += 4;
+  ptr += 2;
 
   *((uint32_t*)ptr) = name_length;
-  ptr += 4;
+  ptr += 2;
 
   memcpy(ptr, data.car_name, name_length);
   ptr += name_length;
@@ -101,13 +170,19 @@ void sendFrame() {
   esp_camera_fb_return(fb);
 }
 
+unsigned long startTime = millis();
+unsigned long startTimeA = millis();
+
 void loop() {
   if (WiFi.getMode() == WIFI_AP_STA) {
     settingsTick();
   }
   if (WiFi.getMode() == WIFI_STA) {
     webSocketsTick();
-    sendFrame();
-  }
-  delay(30);
+    if (millis() - startTime >= 30) {
+      sendFrame();
+      startTime = millis();
+    }
+  }       
+  // delay(30);
 }

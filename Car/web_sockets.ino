@@ -1,9 +1,6 @@
 bool isConnected = false;
 
 void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
-  Serial.print("type: ");
-  Serial.println(type);
-  
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("WebSocket отключён");
@@ -14,10 +11,18 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
       isConnected = true;
       break;
     case WStype_BIN:
-      Serial.printf("get bin: %s\n", payload);
-      break;
-    case WStype_TEXT:
-      Serial.printf("get Text: %s\n", payload);
+      if (length == 6) {
+        int16_t moving, power, direction;
+        
+        memcpy(&moving, payload, sizeof(int16_t));
+        memcpy(&power, payload + sizeof(int16_t), sizeof(int16_t));
+        memcpy(&direction, payload + 2 * sizeof(int16_t), sizeof(int16_t));
+        
+        // Print the received data
+        Serial.printf("Moving: %d, Power: %d, Direction: %d\n", moving, power, direction);
+      } else {
+        Serial.println("Invalid payload length!");
+      }
       break;
     default:
       break;
