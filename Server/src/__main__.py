@@ -11,6 +11,7 @@ from src.contracts import CarSignal, CarTelemetry, ClientSignal, ClientTelemetry
 
 logger = logging.getLogger(__name__)
 html = (Path(__file__).parent.parent / "client.html").read_text()
+html2 = (Path(__file__).parent.parent / "client2.html").read_text()
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
@@ -38,6 +39,10 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/")
 async def get():
     return HTMLResponse(html)
+
+@app.get("/front")
+async def get():
+    return HTMLResponse(html2)
 
 @app.get("/car_pool")
 async def car_pool() -> dict[str, str | None]:

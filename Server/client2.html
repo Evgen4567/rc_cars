@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Car Telemetry and Control</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+        .info {
+            text-align: center;
+        }
+        .info .name {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .info .parameters {
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Car Telemetry and Control</h1>
+    <canvas id="videoCanvas" width="640" height="480"></canvas>
+    <div class="info">
+        <div class="name" id="carName"></div>
+        <div class="parameters">
+            <div>Battery: <span id="batteryLevel"></span></div>
+            <div>Speed: <span id="speedLevel"></span></div>
+            <div>Power: <span id="powerLevel"></span></div>
+        </div>
+    </div>
+    <p>Use W, A, S, D to control the car.</p>
+    <script>
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const carNameElem = document.getElementById('carName');
+        const batteryElem = document.getElementById('batteryLevel');
+        const speedElem = document.getElementById('speedLevel');
+        const powerElem = document.getElementById('powerLevel');
+
+        const socket = new WebSocket('ws://127.0.0.1:8000/client/fake_client/car_8078');
+
+        // Control states
+        const controls = {
+            moving: 0,    // 1 (forward), 0 (neutral), -1 (backward), 9 (brake)
+            power: 0,     // 255 when W or S pressed, 0 otherwise
+            direction: 0  // -1 (left), 1 (right), 0 (neutral)
+        };
+
+        // Function to pack control data into bytes
+        function packCarSignal({ moving, power, direction }) {
+            const buffer = new ArrayBuffer(6); // 2 bytes each for moving, power, direction
+            const view = new DataView(buffer);
+            view.setInt16(0, moving, true);   // int16, little-endian
+            view.setInt16(2, power, true);    // int16, little-endian
+            view.setInt16(4, direction, true); // int16, little-endian
+            return buffer;
+        }
+
+        // Function to unpack car telemetry data
+        function unpackCarTelemetry(data) {
+            const dataView = new DataView(data);
+
+            // Read frame length (4 bytes)
+            let offset = 0;
+            const frameLength = dataView.getUint32(offset, true);
+            offset += 4;
+
+            // Read frame (frameLength bytes)
+            const frame = new Blob([data.slice(offset, offset + frameLength)], { type: 'image/jpeg' });
+            offset += frameLength;
+
+            // Read battery (int16, 2 bytes)
+            const battery = dataView.getInt16(offset, true);
+            offset += 2;
+
+            // Read speed (int16, 2 bytes)
+            const speed = dataView.getInt16(offset, true);
+            offset += 2;
+
+            // Read power (int16, 2 bytes)
+            const power = dataView.getInt16(offset, true);
+            offset += 2;
+
+            // Read name length (int16, 2 bytes)
+            const nameLength = dataView.getInt16(offset, true);
+            offset += 2;
+
+            // Read name (nameLength bytes)
+            const name = new TextDecoder('utf-8').decode(data.slice(offset, offset + nameLength));
+            offset += nameLength;
+
+            return { frame, battery, speed, power, name };
+        }
+
+        // WebSocket handlers
+        socket.onopen = () => console.log('WebSocket connected');
+        socket.onmessage = async (event) => {
+            const arrayBuffer = await event.data.arrayBuffer();
+
+            // Unpack telemetry data
+            const telemetry = unpackCarTelemetry(arrayBuffer);
+
+            // Display frame in canvas
+            const imageURL = URL.createObjectURL(telemetry.frame);
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(imageURL);
+            };
+            img.src = imageURL;
+
+            // Update telemetry information
+            carNameElem.textContent = telemetry.name;
+            batteryElem.textContent = `${telemetry.battery / 100}%`;
+            speedElem.textContent = `${telemetry.speed / 100} m/s`;
+            powerElem.textContent = `${telemetry.power / 100} kW`;
+        };
+        socket.onerror = (err) => console.error('WebSocket error', err);
+        socket.onclose = () => console.log('WebSocket disconnected');
+
+        // Send control signals
+        const sendControlSignal = () => {
+            const packedData = packCarSignal(controls);
+            socket.send(packedData);
+        };
+
+        // Handle key press events for control
+        document.addEventListener('keydown', (event) => {
+            switch (event.key.toLowerCase()) {
+                case 'w':
+                    controls.moving = 1;  // Forward
+                    controls.power = 255;
+                    break;
+                case 's':
+                    controls.moving = -1;  // Backward
+                    controls.power = 255;
+                    break;
+                case 'a':
+                    controls.direction = -1;  // Left
+                    break;
+                case 'd':
+                    controls.direction = 1;  // Right
+                    break;
+                case ' ':
+                    controls.moving = 9;  // Brake
+                    controls.power = 0;
+                    break;
+            }
+            sendControlSignal();
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.key.toLowerCase()) {
+                case 'w':
+                case 's':
+                    controls.moving = 0;  // Neutral
+                    controls.power = 0;
+                    break;
+                case 'a':
+                case 'd':
+                    controls.direction = 0;  // Neutral
+                    break;
+            }
+            sendControlSignal();
+        });
+    </script>
+</body>
+</html>
