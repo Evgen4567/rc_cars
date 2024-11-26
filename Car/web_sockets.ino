@@ -17,9 +17,30 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         memcpy(&moving, payload, sizeof(int16_t));
         memcpy(&power, payload + sizeof(int16_t), sizeof(int16_t));
         memcpy(&direction, payload + 2 * sizeof(int16_t), sizeof(int16_t));
-        
-        // Print the received data
-        Serial.printf("Moving: %d, Power: %d, Direction: %d\n", moving, power, direction);
+
+        if (moving == 1) {
+            analogWrite(PIN_ENB, 255);
+            pcf.write(6, LOW);
+            pcf.write(5, HIGH);
+        } else if (moving == -1) {
+            analogWrite(PIN_ENB, 255);
+            pcf.write(6, HIGH);
+            pcf.write(5, LOW);
+        } else if (!moving) {
+            analogWrite(PIN_ENB, 0);
+        }
+
+        if (direction == -1) {
+            analogWrite(PIN_ENA, 255);
+            pcf.write(4, HIGH);
+            pcf.write(3, LOW);
+        } else if (direction == 1) {
+          analogWrite(PIN_ENA, 255);
+          pcf.write(4, LOW);
+          pcf.write(3, HIGH);
+        } else if (!direction) {
+          analogWrite(PIN_ENA, 0);
+        }
       } else {
         Serial.println("Invalid payload length!");
       }
@@ -46,5 +67,7 @@ bool webSocketsConnected() {
 }
 
 void webSocketsTick() {
-  webSocket.loop();
+  if (WiFi.getMode() == WIFI_STA) {
+    webSocket.loop();
+  }
 }

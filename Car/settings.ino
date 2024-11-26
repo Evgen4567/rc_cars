@@ -30,5 +30,7 @@ void settingsInit() {
 }
 
 void settingsTick() {
-  sett.tick();  
+  if (WiFi.getMode() == WIFI_AP_STA) {
+    sett.tick();  
+  }
 }
