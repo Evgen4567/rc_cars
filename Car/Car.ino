@@ -5,15 +5,26 @@
 #include <SettingsGyver.h>
 #include "esp_camera.h"
 #include <EEPROM.h>
+#include <Wire.h>
+#include <PCF8575.h>
 
 
-#define PIN_SPEED 4 // Вывод управления скоростью вращения мотора №1
-//#define PIN_ENA 16 // Вывод управления скоростью вращения мотора №1
-#define PIN_ENB 2 // Вывод управления скоростью вращения мотора №2
-#define PIN_IN3 14 // Вывод управления направлением вращения мотора №1
-#define PIN_IN4 15 // Вывод управления направлением вращения мотора №1
-//#define PIN_IN3 13 // Вывод управления направлением вращения мотора №2
-//#define PIN_IN4 12 // Вывод управления направлением вращения мотора №2
+
+#define PIN_ENA 13
+#define PIN_ENB 12
+
+PCF8575 pcf(0x20);
+uint8_t lowByte = 0xFF;  // Младший байт для управления P0-P7 (1 = HIGH, 0 = LOW)
+uint8_t highByte = 0xFF; // Старший байт для управления P8-P15
+
+byte n = 1;      // Число лопастей
+float r = 2.7;   // Радиус в сантиметрах
+unsigned long lastflash = 0; // Последнее время импульса
+unsigned long flash = 0;     // Время между импульсами
+float RPM = 0;
+float r_speed = 0;
+
+
 
 
 #define CAR_NAME_SIZE 10
@@ -45,65 +56,56 @@ CarTelemetry car_telemetry;
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PIN_SPEED, INPUT);
+  Wire.begin(14, 15); // SDA, SCL 
+  pcf.begin();
+
   pinMode(PIN_ENA, OUTPUT);
   pinMode(PIN_ENB, OUTPUT);
-  pinMode(PIN_IN3, OUTPUT);
-  pinMode(PIN_IN4, OUTPUT);
-  pinMode(PIN_IN3, OUTPUT);
-  pinMode(PIN_IN4, OUTPUT);
+  
+  //pcf.pinMode(P01, INPUT);
+  //pcf.pinMode(P06, OUTPUT);
+  //pcf.pinMode(P05, OUTPUT);
+  //pcf.pinMode(P04, OUTPUT);
+  //pcf.pinMode(P03, OUTPUT);
 
+  delay(2000);
   Serial.println("Вперед:");
-  digitalWrite(PIN_IN3, LOW);
-  digitalWrite(PIN_IN4, HIGH);
-  analogWrite(PIN_ENB, 250);
-  delay(3000);
+  analogWrite(PIN_ENB, 100);
+  pcf.write(6, LOW);
+  pcf.write(5, HIGH);
+
+  delay(2000);
   Serial.println("Назад:");
-  digitalWrite(PIN_IN3, HIGH);
-  digitalWrite(PIN_IN4, LOW);
-  analogWrite(PIN_ENB, 250);
-  delay(3000);
-  Serial.println("Вперед:");
-  digitalWrite(PIN_IN3, LOW);
-  digitalWrite(PIN_IN4, HIGH);
-  analogWrite(PIN_ENB, 250);
-  delay(3000);
-  Serial.println("Назад:");
-  digitalWrite(PIN_IN3, HIGH);
-  digitalWrite(PIN_IN4, LOW);
-  analogWrite(PIN_ENB, 250);
-  delay(3000);
-  Serial.println("Стоп нахуй:");
+  analogWrite(PIN_ENB, 100);
+  pcf.write(6, HIGH);
+  pcf.write(5, LOW);
+  
+  delay(2000);
+  Serial.println("СТОП:");
   analogWrite(PIN_ENB, 0);
-  digitalWrite(PIN_IN3, LOW);
-  digitalWrite(PIN_IN4, LOW);
-  delay(3000);
 
+  delay(2000);
   Serial.println("Влево:");
-  digitalWrite(PIN_IN1, LOW);
-  digitalWrite(PIN_IN2, HIGH);
-  analogWrite(PIN_ENA, 250);
-  delay(3000);
+  analogWrite(PIN_ENA, 255);
+  pcf.write(4, HIGH);
+  pcf.write(3, LOW);
+
+  delay(2000);
   Serial.println("Вправо:");
-  digitalWrite(PIN_IN1, HIGH);
-  digitalWrite(PIN_IN2, LOW);
-  analogWrite(PIN_ENA, 250);
-  delay(3000);
-  Serial.println("Влево:");
-  digitalWrite(PIN_IN1, LOW);
-  digitalWrite(PIN_IN2, HIGH);
-  analogWrite(PIN_ENB, 250);
-  delay(3000);
-  Serial.println("Вправо:");
-  digitalWrite(PIN_IN1, HIGH);
-  digitalWrite(PIN_IN2, LOW);
-  analogWrite(PIN_ENA, 250);
-  delay(3000);
-  Serial.println("Стоп нахуй:");
+  analogWrite(PIN_ENA, 255);
+  pcf.write(4, LOW);
+  pcf.write(3, HIGH);
+
+  delay(2000);
+  Serial.println("СТОП:");
   analogWrite(PIN_ENA, 0);
-  digitalWrite(PIN_IN1, LOW);
-  digitalWrite(PIN_IN2, LOW);
-  delay(3000);
+
+  
+
+  
+  //setPinHigh(2);
+
+
 
   if (!readEeprom()) {
     snprintf(data.car_name, CAR_NAME_SIZE, "car_%04d", random(1, 9999));
@@ -170,9 +172,9 @@ void sendFrame() {
   esp_camera_fb_return(fb);
 }
 
-unsigned long startTime = millis();
-unsigned long startTimeA = millis();
 
+
+  static unsigned long startTime = 0;
 void loop() {
   if (WiFi.getMode() == WIFI_AP_STA) {
     settingsTick();
@@ -184,5 +186,34 @@ void loop() {
       startTime = millis();
     }
   }       
-  // delay(30);
+
+
+
+  static int lastState = HIGH;
+  int currentState = pcf.read(1); // Считать состояние пина P01
+
+  if (currentState == LOW && lastState == HIGH) {  // Срабатывание по фронту
+    flash = micros() - lastflash;
+    lastflash = micros();
+  }
+  lastState = currentState;
+
+  // Если сигнала нет больше секунды
+  if (micros() - lastflash > 1000000) {
+    RPM = 0;
+    r_speed = 0;
+  } else {
+    float rev_time = (float) flash / 1000000 * n;             // Время одного оборота в секундах
+    RPM = (float) 60 / rev_time;                              // Обороты в минуту
+    r_speed = (float) 2 * 3.1415 * r / 100 / rev_time * 3.6;  // Скорость в км/ч
+  }
+
+  // Периодический вывод каждые 300 мс
+  static unsigned long lastshow = 0;
+  if (millis() - lastshow > 500) {
+    Serial.println(String("RPM: ") + String(RPM) + String(" SPEED: ") + String(r_speed));
+    lastshow = millis();
+  }
+
+
 }
