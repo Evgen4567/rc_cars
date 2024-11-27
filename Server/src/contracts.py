@@ -185,9 +185,6 @@ class ClientSignal(AbstractPacket):
         return moving_bytes + power_bytes + direction_bytes
 
 
-A = TypeVar("A", bound="AbstractPacket")
-
-
 def repack(data: T, new_type: type[N]) -> N:
     if isinstance(data, CarTelemetry) and new_type is ClientTelemetry:
         return ClientTelemetry(  # type: ignore[return-value]
