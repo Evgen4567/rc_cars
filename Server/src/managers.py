@@ -1,11 +1,14 @@
 import asyncio
 import logging
+from typing import TYPE_CHECKING, TypeVar
 
 from fastapi import WebSocket
 
-from src.contracts import A
+if TYPE_CHECKING:
+    from src.contracts import AbstractPacket
 
 logger = logging.getLogger(__name__)
+A = TypeVar("A", bound="AbstractPacket")
 
 
 class WebsocketManager:
