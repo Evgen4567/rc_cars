@@ -189,7 +189,7 @@ A = TypeVar("A", bound="AbstractPacket")
 
 
 def unpack(data: bytes, data_type: type[A]) -> A:
-    if not isinstance(data, AbstractPacket):
+    if not isinstance(data_type, AbstractPacket):
         msg = f"Unsupported data type: {type(data).__name__}"
         raise TypeError(msg)
     return data_type.unpack(data)
