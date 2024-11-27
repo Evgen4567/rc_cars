@@ -1,6 +1,8 @@
 import logging
 import struct
-from typing import Any, Literal, NamedTuple, TypeVar
+from abc import abstractmethod
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol, Self, TypeVar, runtime_checkable
 
 logger = logging.getLogger(__name__)
 BATTERY_MULTIPLIER = 100
@@ -8,37 +10,6 @@ SPEED_MULTIPLIER = 100
 INT16_OFFSET = 2
 INT32_OFFSET = 4
 FLOAT32_OFFSET = 4
-
-
-# Телеметрия идет Car -> Server -> Client
-class CarTelemetry(NamedTuple):
-    frame: bytes
-    battery: int
-    speed: int
-    power: int
-    name: str
-
-
-class ClientTelemetry(NamedTuple):
-    frame: bytes
-    battery: float
-    speed: float
-    power: float
-    name: str
-
-
-# Сигнал идет Client -> Server -> Car
-class CarSignal(NamedTuple):
-    moving: int
-    power: int
-    direction: int
-
-
-class ClientSignal(NamedTuple):
-    moving: int
-    power: int
-    direction: int
-
 
 T = TypeVar("T")
 N = TypeVar("N")
@@ -57,153 +28,175 @@ def _check_type(data: T, expect_type: type[T]) -> None:
         raise TypeError(msg)
 
 
-def _unpack_car_telemetry(data: bytes) -> CarTelemetry:
-    try:
-        # Картинка - любое число байтов
-        frame_length, data = _unpack_data("I", INT32_OFFSET, data)
-        frame = data[:frame_length]
-        data = data[frame_length:]
+@runtime_checkable
+class AbstractPacket(Protocol):
+    @classmethod
+    @abstractmethod
+    def unpack(cls, data: bytes) -> Self: ...
 
-        battery, data = _unpack_data("h", INT16_OFFSET, data)
-        speed, data = _unpack_data("h", INT16_OFFSET, data)
-        power, data = _unpack_data("h", INT16_OFFSET, data)
-
-        # Имя - любое число байтов
-        name_length, data = _unpack_data("h", INT16_OFFSET, data)
-        name = data[:name_length].decode("utf-8")
-    except struct.error as e:
-        msg = "Invalid format of car telemetry packet"
-        raise ValueError(msg) from e
-
-    _check_type(frame, bytes)
-    _check_type(battery, int)
-    _check_type(speed, int)
-    _check_type(power, int)
-    _check_type(name, str)
-    return CarTelemetry(frame=frame, battery=battery, speed=speed, power=power, name=name)
+    @abstractmethod
+    def pack(self) -> bytes: ...
 
 
-def _pack_car_telemetry(car_telemetry: CarTelemetry) -> bytes:
-    # Объекты без фиксированной длины
-    frame_length = len(car_telemetry.frame)
-    frame_packed = struct.pack("I", frame_length) + car_telemetry.frame
-    name_bytes = car_telemetry.name.encode("utf-8")
-    name_length = len(name_bytes)
-    name_packed = struct.pack("h", name_length) + name_bytes
+# Телеметрия идет Car -> Server -> Client
+@dataclass(slots=True)
+class CarTelemetry(AbstractPacket):
+    frame: bytes
+    battery: int
+    speed: int
+    power: int
+    name: str
 
-    # int16
-    battery_packed = struct.pack("h", car_telemetry.battery)
-    speed_packed = struct.pack("h", car_telemetry.speed)
-    power_packed = struct.pack("h", car_telemetry.power)
-    return frame_packed + battery_packed + speed_packed + power_packed + name_packed
+    @classmethod
+    def unpack(cls, data: bytes) -> "CarTelemetry":
+        try:
+            # Картинка - любое число байтов
+            frame_length, data = _unpack_data("I", INT32_OFFSET, data)
+            frame = data[:frame_length]
+            data = data[frame_length:]
+
+            battery, data = _unpack_data("h", INT16_OFFSET, data)
+            speed, data = _unpack_data("h", INT16_OFFSET, data)
+            power, data = _unpack_data("h", INT16_OFFSET, data)
+
+            # Имя - любое число байтов
+            name_length, data = _unpack_data("h", INT16_OFFSET, data)
+            name = data[:name_length].decode("utf-8")
+        except struct.error as e:
+            msg = "Invalid format of car telemetry packet"
+            raise ValueError(msg) from e
+
+        _check_type(frame, bytes)
+        _check_type(battery, int)
+        _check_type(speed, int)
+        _check_type(power, int)
+        _check_type(name, str)
+        return cls(frame=frame, battery=battery, speed=speed, power=power, name=name)
+
+    def pack(self) -> bytes:
+        # Объекты без фиксированной длины
+        frame_length = len(self.frame)
+        frame_packed = struct.pack("I", frame_length) + self.frame
+        name_bytes = self.name.encode("utf-8")
+        name_length = len(name_bytes)
+        name_packed = struct.pack("h", name_length) + name_bytes
+
+        # int16
+        battery_packed = struct.pack("h", self.battery)
+        speed_packed = struct.pack("h", self.speed)
+        power_packed = struct.pack("h", self.power)
+        return frame_packed + battery_packed + speed_packed + power_packed + name_packed
 
 
-def _unpack_client_telemetry(data: bytes) -> ClientTelemetry:
-    try:
-        # Картинка - любое число байтов
-        frame_length, data = _unpack_data("I", INT32_OFFSET, data)
-        frame = data[:frame_length]
-        data = data[frame_length:]
+@dataclass(slots=True)
+class ClientTelemetry(AbstractPacket):
+    frame: bytes
+    battery: float
+    speed: float
+    power: float
+    name: str
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "ClientTelemetry":
+        try:
+            # Картинка - любое число байтов
+            frame_length, data = _unpack_data("I", INT32_OFFSET, data)
+            frame = data[:frame_length]
+            data = data[frame_length:]
+
+            # float32
+            battery, data = _unpack_data("f", FLOAT32_OFFSET, data)
+            speed, data = _unpack_data("f", FLOAT32_OFFSET, data)
+            power, data = _unpack_data("f", FLOAT32_OFFSET, data)
+
+            # Имя - любое число байтов
+            name_length, data = _unpack_data("h", INT16_OFFSET, data)
+            name = data[:name_length].decode("utf-8")
+
+        except struct.error as e:
+            msg = "Invalid format of telemetry packet"
+            raise ValueError(msg) from e
+        _check_type(frame, bytes)
+        _check_type(battery, float)
+        _check_type(speed, float)
+        _check_type(power, float)
+        _check_type(name, str)
+        return cls(frame=frame, battery=battery, speed=speed, power=power, name=name)
+
+    def pack(self) -> bytes:
+        # Объекты без фиксированной длины
+        frame_length = len(self.frame)
+        frame_packed = struct.pack("I", frame_length) + self.frame
 
         # float32
-        battery, data = _unpack_data("f", FLOAT32_OFFSET, data)
-        speed, data = _unpack_data("f", FLOAT32_OFFSET, data)
-        power, data = _unpack_data("f", FLOAT32_OFFSET, data)
+        battery_packed = struct.pack("f", self.battery)
+        speed_packed = struct.pack("f", self.speed)
+        power_packed = struct.pack("f", self.power)
 
-        # Имя - любое число байтов
-        name_length, data = _unpack_data("h", INT16_OFFSET, data)
-        name = data[:name_length].decode("utf-8")
+        # Упаковываем name
+        name_bytes = self.name.encode("utf-8")
+        name_length = len(self.name)
+        name_packed = struct.pack("h", name_length) + name_bytes
 
-    except struct.error as e:
-        msg = "Invalid format of telemetry packet"
-        raise ValueError(msg) from e
-    _check_type(frame, bytes)
-    _check_type(battery, float)
-    _check_type(speed, float)
-    _check_type(power, float)
-    _check_type(name, str)
-    return ClientTelemetry(frame=frame, battery=battery, speed=speed, power=power, name=name)
+        # Объединяем все в один байтовый объект
+        return frame_packed + battery_packed + speed_packed + power_packed + name_packed
 
 
-def _pack_client_telemetry(client_telemetry: ClientTelemetry) -> bytes:
-    # Объекты без фиксированной длины
-    frame_length = len(client_telemetry.frame)
-    frame_packed = struct.pack("I", frame_length) + client_telemetry.frame
+# Сигнал идет Client -> Server -> Car
+@dataclass(slots=True)
+class CarSignal(AbstractPacket):
+    moving: int
+    power: int
+    direction: int
 
-    # float32
-    battery_packed = struct.pack("f", client_telemetry.battery)
-    speed_packed = struct.pack("f", client_telemetry.speed)
-    power_packed = struct.pack("f", client_telemetry.power)
+    @classmethod
+    def unpack(cls, data: bytes) -> "CarSignal":
+        moving, data = _unpack_data("h", INT16_OFFSET, data)
+        power, data = _unpack_data("h", INT16_OFFSET, data)
+        direction, data = _unpack_data("h", INT16_OFFSET, data)
+        return cls(moving=moving, power=power, direction=direction)
 
-    # Упаковываем name
-    name_bytes = client_telemetry.name.encode("utf-8")
-    name_length = len(client_telemetry.name)
-    name_packed = struct.pack("h", name_length) + name_bytes
-
-    # Объединяем все в один байтовый объект
-    return frame_packed + battery_packed + speed_packed + power_packed + name_packed
-
-
-def _unpack_car_signal(data: bytes) -> CarSignal:
-    moving, data = _unpack_data("h", INT16_OFFSET, data)
-    power, data = _unpack_data("h", INT16_OFFSET, data)
-    direction, data = _unpack_data("h", INT16_OFFSET, data)
-    return CarSignal(moving=moving, power=power, direction=direction)
+    def pack(self) -> bytes:
+        # int16
+        moving_bytes = struct.pack("h", self.moving)
+        power_bytes = struct.pack("h", self.power)
+        direction_bytes = struct.pack("h", self.direction)
+        return moving_bytes + power_bytes + direction_bytes
 
 
-def _pack_car_signal(car_signal: CarSignal) -> bytes:
-    # int16
-    moving_bytes = struct.pack("h", car_signal.moving)
-    power_bytes = struct.pack("h", car_signal.power)
-    direction_bytes = struct.pack("h", car_signal.direction)
-    return moving_bytes + power_bytes + direction_bytes
+@dataclass(slots=True)
+class ClientSignal(AbstractPacket):
+    moving: int
+    power: int
+    direction: int
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "ClientSignal":
+        moving, data = _unpack_data("h", INT16_OFFSET, data)
+        power, data = _unpack_data("h", INT16_OFFSET, data)
+        direction, data = _unpack_data("h", INT16_OFFSET, data)
+        return cls(moving=moving, power=power, direction=direction)
+
+    def pack(self) -> bytes:
+        # int16
+        moving_bytes = struct.pack("h", self.moving)
+        power_bytes = struct.pack("h", self.power)
+        direction_bytes = struct.pack("h", self.direction)
+        return moving_bytes + power_bytes + direction_bytes
 
 
-def _unpack_client_signal(data: bytes) -> ClientSignal:
-    moving, data = _unpack_data("h", INT16_OFFSET, data)
-    power, data = _unpack_data("h", INT16_OFFSET, data)
-    direction, data = _unpack_data("h", INT16_OFFSET, data)
-    return ClientSignal(moving=moving, power=power, direction=direction)
+A = TypeVar("A", bound="AbstractPacket")
 
 
-def _pack_client_signal(client_signal: ClientSignal) -> bytes:
-    # int16
-    moving_bytes = struct.pack("h", client_signal.moving)
-    power_bytes = struct.pack("h", client_signal.power)
-    direction_bytes = struct.pack("h", client_signal.direction)
-    return moving_bytes + power_bytes + direction_bytes
+def unpack(data: bytes, data_type: type[A]) -> A:
+    return data_type.unpack(data)
 
 
-def unpack(data: bytes, data_type: type[T]) -> T:
-    match data_type:
-        case _ if data_type is CarTelemetry:
-            result = _unpack_car_telemetry(data)
-        case _ if data_type is CarSignal:
-            result = _unpack_car_signal(data)  # type: ignore[assignment]
-        case _ if data_type is ClientTelemetry:
-            result = _unpack_client_telemetry(data)  # type: ignore[assignment]
-        case _ if data_type is ClientSignal:
-            result = _unpack_client_signal(data)  # type: ignore[assignment]
-        case _:
-            msg = f"Unsupported data type: {data_type}"
-            raise ValueError(msg)
-    return result  # type: ignore[return-value]
-
-
-def pack(data: T) -> bytes:
-    match data:
-        case _ if isinstance(data, CarTelemetry):
-            result = _pack_car_telemetry(data)
-        case _ if isinstance(data, CarSignal):
-            result = _pack_car_signal(data)
-        case _ if isinstance(data, ClientTelemetry):
-            result = _pack_client_telemetry(data)
-        case _ if isinstance(data, ClientSignal):
-            result = _pack_client_signal(data)
-        case _:
-            msg = f"Unsupported data type: {data}"
-            raise ValueError(msg)
-    return result
+def pack(data: A) -> bytes:
+    if not isinstance(data, AbstractPacket):
+        msg = f"Unsupported data type: {type(data).__name__}"
+        raise TypeError(msg)
+    return data.pack()
 
 
 def repack(data: T, new_type: type[N]) -> N:

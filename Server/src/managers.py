@@ -1,13 +1,11 @@
 import asyncio
 import logging
-from typing import TypeVar
 
 from fastapi import WebSocket
 
-from src.contracts import pack, unpack
+from src.contracts import A, pack, unpack
 
 logger = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 class WebsocketManager:
@@ -27,12 +25,12 @@ class WebsocketManager:
     def disconnect(self, object_id: str) -> None:
         del self.active_connections[object_id]
 
-    async def receive(self, object_id: str, expect_data_type: type[T]) -> T:
+    async def receive(self, object_id: str, expect_data_type: type[A]) -> A:
         websocket = self._get_object_websocket(object_id)
         bytes_data = await websocket.receive_bytes()
         return unpack(bytes_data, expect_data_type)
 
-    async def send(self, object_id: str, contract: T) -> None:
+    async def send(self, object_id: str, contract: A) -> None:
         data = pack(contract)
         websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
