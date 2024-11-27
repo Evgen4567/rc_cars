@@ -9,9 +9,8 @@ package-mode = false
 [tool.poetry.dependencies]
 python = "^3.13"
 fastapi = "^0.115.5"
-uvicorn = {extras = ["standart"], version = "^0.32.1"}
+uvicorn = {extras = ["standard"], version = "^0.32.1"}
 websockets = "^14.1"
-uvloop = "^0.21.0"
 
 
 [build-system]
