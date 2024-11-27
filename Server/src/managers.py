@@ -1,11 +1,14 @@
 import asyncio
 import logging
 from typing import TypeVar
+
 from fastapi import WebSocket
+
 from src.contracts import pack, unpack
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+
 
 class WebsocketManager:
     def __init__(self) -> None:
@@ -13,25 +16,27 @@ class WebsocketManager:
 
     def _get_object_websocket(self, object_id: str) -> WebSocket:
         if not (websocket := self.active_connections.get(object_id)):
-            raise Exception(f"WTF: where is {object_id=} websocket?")
+            msg = f"WTF: where is {object_id=} websocket?"
+            raise RuntimeError(msg)
         return websocket
 
-    async def connect(self, websocket: WebSocket, object_id: str):
+    async def connect(self, websocket: WebSocket, object_id: str) -> None:
         await websocket.accept()
         self.active_connections[object_id] = websocket
 
-    def disconnect(self, object_id: str):
+    def disconnect(self, object_id: str) -> None:
         del self.active_connections[object_id]
 
     async def receive(self, object_id: str, expect_data_type: type[T]) -> T:
         websocket = self._get_object_websocket(object_id)
         bytes_data = await websocket.receive_bytes()
         return unpack(bytes_data, expect_data_type)
-    
+
     async def send(self, object_id: str, contract: T) -> None:
         data = pack(contract)
         websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
+
 
 class CarPoolManager:
     def __init__(self, sleep_update_cars_seconds: float):
@@ -39,7 +44,7 @@ class CarPoolManager:
         self.owner_car_pool: dict[str, str] = {}
         self.sleep_update_cars_seconds = sleep_update_cars_seconds
 
-    def add_car(self, car_id: str, owner_id: str | None = None):
+    def add_car(self, car_id: str, owner_id: str | None = None) -> None:
         """Добавить новую машину в пул. Если нет владельца, то она свободна."""
         self.car_owner_pool[car_id] = owner_id
         if owner_id:
@@ -48,27 +53,29 @@ class CarPoolManager:
     def assign_car(self, client_id: str, car_id: str) -> bool:
         """Назначить машину клиенту, если она свободна и принадлежит клиенту."""
         if car_id not in self.car_owner_pool:
-            raise ValueError(f"Машина {car_id} не существует в пуле.")
-        
+            msg = f"Машина {car_id} не существует в пуле."
+            raise ValueError(msg)
+
         if self.car_owner_pool[car_id] is not None:
-            raise RuntimeError(f"Машина {car_id} уже занята.")
-        
+            msg = f"Машина {car_id} уже занята."
+            raise RuntimeError(msg)
+
         self.car_owner_pool[car_id] = client_id
         self.owner_car_pool[client_id] = car_id
         return True
 
-    def release_car(self, car_id: str, owner_id: str):
+    def release_car(self, car_id: str, owner_id: str) -> None:
         """Освободить машину, удалив владельца."""
         if car_id in self.car_owner_pool:
             self.car_owner_pool[car_id] = None
         if owner_id in self.owner_car_pool:
             del self.owner_car_pool[owner_id]
 
-    def get_available_cars(self):
+    def get_available_cars(self) -> list[str]:
         """Получить список свободных машин (где нет владельца)."""
         return [car_id for car_id, owner_id in self.car_owner_pool.items() if owner_id is None]
 
-    async def update_available_cars(self, external_car_list: list[str]):
+    async def update_available_cars(self, external_car_list: list[str]) -> None:
         """Обновить список доступных машин из внешнего источника."""
         for car_id in external_car_list:
             if car_id not in self.car_owner_pool:
