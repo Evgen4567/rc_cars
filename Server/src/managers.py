@@ -3,7 +3,7 @@ import logging
 
 from fastapi import WebSocket
 
-from src.contracts import A, pack, unpack
+from src.contracts import A
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ class WebsocketManager:
     async def receive(self, object_id: str, expect_data_type: type[A]) -> A:
         websocket = self._get_object_websocket(object_id)
         bytes_data = await websocket.receive_bytes()
-        return unpack(bytes_data, expect_data_type)
+        return expect_data_type.unpack(bytes_data)
 
     async def send(self, object_id: str, contract: A) -> None:
-        data = pack(contract)
+        data = contract.pack()
         websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
 

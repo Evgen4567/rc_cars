@@ -188,20 +188,6 @@ class ClientSignal(AbstractPacket):
 A = TypeVar("A", bound="AbstractPacket")
 
 
-def unpack(data: bytes, data_type: type[A]) -> A:
-    if not isinstance(data_type, AbstractPacket):
-        msg = f"Unsupported data type: {type(data).__name__}"
-        raise TypeError(msg)
-    return data_type.unpack(data)
-
-
-def pack(data: A) -> bytes:
-    if not isinstance(data, AbstractPacket):
-        msg = f"Unsupported data type: {type(data).__name__}"
-        raise TypeError(msg)
-    return data.pack()
-
-
 def repack(data: T, new_type: type[N]) -> N:
     if isinstance(data, CarTelemetry) and new_type is ClientTelemetry:
         return ClientTelemetry(  # type: ignore[return-value]
