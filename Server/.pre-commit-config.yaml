@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-ast
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: end-of-file-fixer
+        exclude: tests/
+      - id: trailing-whitespace
+        exclude: tests/
+      - id: check-merge-conflict
+      - id: debug-statements
+        exclude: tests/
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.5
+    hooks:
+      - id: ruff-format
+        args: ["--config", "$HOME/.config/ruff/ruff.toml"]
+        exclude: migrations/
+      - id: ruff
+        args: ["--fix", "--config", "$HOME/.config/ruff/ruff.toml"]
+        exclude: migrations/
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args:
+          [
+            "--select=CCR001,ECE001",
+            "--max-cognitive-complexity=7",
+            "--max-expression-complexity=7"
+          ]
+        additional_dependencies:
+          - flake8-cognitive-complexity==0.1.0
+          - flake8-expression-complexity==v0.0.11
+        exclude: migrations/
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.0.0
+    hooks:
+      - id: mypy
+        entry: bash -c 'mypy --config-file $HOME/.config/mypy/config/mypy.ini --python-version=3.12 --python-executable $(pwd)/Server/.venv/bin/python3 . --strict' --
