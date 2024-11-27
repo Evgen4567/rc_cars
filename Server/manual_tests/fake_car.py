@@ -2,7 +2,7 @@ import asyncio
 import random
 
 import websockets
-from src.contracts import CarTelemetry, pack
+from src.contracts import CarTelemetry
 
 
 def generate_telemetry(car_id: str) -> bytes:
@@ -13,7 +13,7 @@ def generate_telemetry(car_id: str) -> bytes:
     power = random.randint(5000, 15000)
 
     telemetry = CarTelemetry(frame_data, battery, speed, power, car_id)
-    return pack(telemetry)
+    return telemetry.pack()
 
 
 async def read_messages(websocket) -> None:  # type: ignore[no-untyped-def] # noqa:ANN001

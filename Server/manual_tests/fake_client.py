@@ -2,7 +2,7 @@ import asyncio
 import random
 
 import websockets
-from src.contracts import CarSignal, pack
+from src.contracts import CarSignal
 
 
 def generate_signal() -> bytes:
@@ -11,7 +11,7 @@ def generate_signal() -> bytes:
     direction = random.randint(-1024, 1024)
 
     telemetry = CarSignal(moving, power, direction)
-    return pack(telemetry)
+    return telemetry.pack()
 
 
 async def read_messages(websocket) -> None:  # type: ignore[no-untyped-def] # noqa:ANN001
