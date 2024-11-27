@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from src.contracts import AbstractPacket
 
 logger = logging.getLogger(__name__)
-A = TypeVar("A", bound="AbstractPacket")
+T = TypeVar("T", bound="AbstractPacket")
 
 
 class WebsocketManager:
@@ -28,12 +28,12 @@ class WebsocketManager:
     def disconnect(self, object_id: str) -> None:
         del self.active_connections[object_id]
 
-    async def receive(self, object_id: str, expect_data_type: type[A]) -> A:
+    async def receive(self, object_id: str, expect_data_type: type[T]) -> T:
         websocket = self._get_object_websocket(object_id)
         bytes_data = await websocket.receive_bytes()
         return expect_data_type.unpack(bytes_data)
 
-    async def send(self, object_id: str, contract: A) -> None:
+    async def send(self, object_id: str, contract: T) -> None:
         data = contract.pack()
         websocket = self._get_object_websocket(object_id)
         await websocket.send_bytes(data)
