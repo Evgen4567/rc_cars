@@ -86,3 +86,24 @@ class CarPoolManager:
             if car_id not in external_car_list:
                 del self.car_owner_pool[car_id]
         await asyncio.sleep(self.sleep_update_cars_seconds)
+
+
+class LobbyManager:
+    def __init__(self) -> None:
+        self.subscribers: dict[str, WebSocket] = {}
+        self._limit_connections = 1000
+
+    async def connect(self, websocket: WebSocket, object_id: str) -> bool:
+        if len(self.subscribers) >= self._limit_connections:
+            return False
+        await websocket.accept()
+        self.subscribers[object_id] = websocket
+        return True
+
+    def disconnect(self, object_id: str) -> None:
+        del self.subscribers[object_id]
+
+    async def broadcast(self, contract: T) -> None:
+        data = contract.pack()
+        for ws in self.subscribers.values():
+            await ws.send_bytes(data)

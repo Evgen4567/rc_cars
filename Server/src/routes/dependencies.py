@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from src.managers import CarPoolManager, WebsocketManager
+from src.managers import CarPoolManager, LobbyManager, WebsocketManager
 
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
+lobby_manager = LobbyManager()
 background_tasks = set()
 
 
@@ -40,3 +41,7 @@ def get_client_manager() -> WebsocketManager:
 
 def get_car_pool_manager() -> CarPoolManager:
     return car_pool_manager
+
+
+def get_lobby_manager() -> LobbyManager:
+    return lobby_manager

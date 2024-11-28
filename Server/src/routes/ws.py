@@ -4,8 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from src.contracts import CarSignal, CarTelemetry, ClientSignal, ClientTelemetry, repack
-from src.managers import CarPoolManager, WebsocketManager
-from src.routes.dependencies import get_car_manager, get_car_pool_manager, get_client_manager
+from src.managers import CarPoolManager, LobbyManager, WebsocketManager
+from src.routes.dependencies import get_car_manager, get_car_pool_manager, get_client_manager, get_lobby_manager
 
 logger = logging.getLogger(__name__)
 ws_router = APIRouter()
@@ -17,16 +17,19 @@ async def car(
     car_id: str,
     car_manager: Annotated[WebsocketManager, Depends(get_car_manager)],
     car_pool_manager: Annotated[CarPoolManager, Depends(get_car_pool_manager)],
+    lobby_manager: Annotated[LobbyManager, Depends(get_lobby_manager)],
     client_manager: Annotated[WebsocketManager, Depends(get_client_manager)],
 ) -> None:
     await car_manager.connect(websocket, car_id)
     try:
         while True:
             telemetry = await car_manager.receive(car_id, CarTelemetry)
+            client_telemetry = repack(telemetry, ClientTelemetry)
+            await lobby_manager.broadcast(client_telemetry)
             if not (client_id := car_pool_manager.car_owner_pool.get(car_id)):
                 continue
-            client_telemetry = repack(telemetry, ClientTelemetry)
             await client_manager.send(client_id, client_telemetry)
+
     except WebSocketDisconnect:
         car_manager.disconnect(car_id)
 
@@ -54,3 +57,21 @@ async def client_car(
         client_manager.disconnect(client_id)
         car_pool_manager.release_car(car_id, client_id)
         logger.info(f"Client #{client_id} left")  # noqa: G004
+
+
+@ws_router.websocket("/lobby/{client_name}")
+async def lobby(
+    websocket: WebSocket,
+    client_name: str,
+    lobby_manager: Annotated[LobbyManager, Depends(get_lobby_manager)],
+) -> None:
+    if not await lobby_manager.connect(websocket, client_name):
+        return
+    logger.info(f"Client join to lobby: {client_name}")  # noqa: G004
+    try:
+        while True:
+            client_text = await websocket.receive_text()
+            logger.info(f"Client sent: {client_text}")  # noqa: G004
+    except WebSocketDisconnect:
+        lobby_manager.disconnect(client_name)
+        logger.info(f"Client #{client_name} left")  # noqa: G004

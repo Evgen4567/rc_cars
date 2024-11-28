@@ -28,11 +28,15 @@ async def send_messages(websocket, car_id) -> None:  # type: ignore[no-untyped-d
         await asyncio.sleep(0.001)
 
 
-async def main() -> None:
-    car_id = "fake_car"
+async def start_car(car_id: str) -> None:
     uri = f"ws://127.0.0.1:8000/car/{car_id}"
     async with websockets.connect(uri) as websocket:
         await asyncio.gather(read_messages(websocket), send_messages(websocket, car_id))
+
+
+async def main() -> None:
+    tasks = [start_car(f"fake_car_{i}") for i in range(3)]
+    await asyncio.gather(*tasks)
 
 
 asyncio.run(main())
