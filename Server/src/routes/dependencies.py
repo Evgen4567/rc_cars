@@ -12,7 +12,6 @@ client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
 redis_client = Redis()
 background_tasks = set()
-BROADCAST_DELAY = 0.001
 
 
 async def update_cars_loop() -> None:
