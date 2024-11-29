@@ -31,9 +31,12 @@ async def send_messages(websocket, object_id) -> None:  # type: ignore[no-untype
 async def start_observer(car_id: str) -> None:
     url = f"http://127.0.0.1:8000/observer/{car_id}"
     client = httpx.AsyncClient()
-    async with client.stream(HTTPMethod.GET, url) as r:
-        async for _ in r.aiter_bytes():
-            ...
+    try:
+        async with client.stream(HTTPMethod.GET, url) as r:
+            async for _ in r.aiter_bytes():
+                ...
+    except Exception as e:
+        print(e)
 
 
 async def run_observes() -> None:
