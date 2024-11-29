@@ -10,7 +10,8 @@ from src.managers import CarPoolManager
 from src.routes.dependencies import broadcast, get_car_pool_manager
 
 logger = logging.getLogger(__name__)
-html = (Path(__file__).parent.parent.parent / "client.html").read_text()
+html = (Path(__file__).parent.parent.parent / "client.html").read_text(encoding='utf-8')
+html_lobby = (Path(__file__).parent.parent.parent / "lobby.html").read_text(encoding='utf-8')
 
 rest_router = APIRouter()
 
@@ -18,10 +19,13 @@ rest_router = APIRouter()
 @rest_router.get("/")
 async def index() -> HTMLResponse:
     return HTMLResponse(html)
+@rest_router.get("/lobby")
+async def index() -> HTMLResponse:
+    return HTMLResponse(html_lobby, media_type="text/html; charset=utf-8")
 
 
-@rest_router.get("/front")
-async def front() -> HTMLResponse:
+@rest_router.get("/client")
+async def client() -> HTMLResponse:
     return HTMLResponse(html)
 
 
@@ -35,6 +39,6 @@ async def observer(
     car_id: str,
     car_pool_manager: Annotated[CarPoolManager, Depends(get_car_pool_manager)],
 ) -> StreamingResponse:
-    if car_id not in car_pool_manager.car_owner_pool:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
+    # if car_id not in car_pool_manager.car_owner_pool:
+    #     raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
     return StreamingResponse(broadcast(car_id))
