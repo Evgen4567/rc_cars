@@ -1,6 +1,8 @@
 import asyncio
 import random
+from http import HTTPMethod
 
+import httpx
 import websockets
 from src.contracts import CarSignal
 
@@ -26,20 +28,25 @@ async def send_messages(websocket, object_id) -> None:  # type: ignore[no-untype
         await asyncio.sleep(0.01)
 
 
-async def start_lobby_observer(client_name: str) -> None:
-    uri = f"ws://127.0.0.1:8000/lobby/{client_name}"
-    async with websockets.connect(uri) as websocket:
-        await read_messages(websocket)
+async def start_observer(car_id: str) -> None:
+    url = f"http://127.0.0.1:8000/observer/{car_id}"
+    client = httpx.AsyncClient()
+    async with client.stream(HTTPMethod.GET, url) as r:
+        async for _ in r.aiter_bytes():
+            ...
 
 
-async def run_lobby_ws_connection() -> None:
-    tasks = [start_lobby_observer(f"observer_{i}") for i in range(10)]
+async def run_observes() -> None:
+    tasks = []
+    for _ in range(30):
+        random_car_id = random.randint(0, 2)
+        tasks.append(start_observer(f"fake_car_{random_car_id}"))
     await asyncio.gather(*tasks)
 
 
 async def main() -> None:
     background_tasks = set()
-    task: asyncio.Task[None] = asyncio.create_task(run_lobby_ws_connection())
+    task: asyncio.Task[None] = asyncio.create_task(run_observes())
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
     client_id = "fake_client"
