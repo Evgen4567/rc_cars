@@ -3,12 +3,14 @@ from collections.abc import AsyncGenerator, Callable, Coroutine
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from src.managers import CarPoolManager, WebsocketManager
 
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
+redis_client = Redis()
 background_tasks = set()
 
 
@@ -40,3 +42,14 @@ def get_client_manager() -> WebsocketManager:
 
 def get_car_pool_manager() -> CarPoolManager:
     return car_pool_manager
+
+
+def get_redis_stream_client() -> Redis:
+    return redis_client
+
+
+async def broadcast(car_id: str) -> AsyncGenerator[bytes, None]:
+    stream = redis_client.pubsub(ignore_subscribe_messages=True)
+    await stream.subscribe(car_id)
+    async for message in stream.listen():
+        yield message["data"]

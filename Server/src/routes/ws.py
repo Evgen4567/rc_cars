@@ -2,10 +2,11 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from redis.asyncio import Redis
 
 from src.contracts import CarSignal, CarTelemetry, ClientSignal, ClientTelemetry, repack
 from src.managers import CarPoolManager, WebsocketManager
-from src.routes.dependencies import get_car_manager, get_car_pool_manager, get_client_manager
+from src.routes.dependencies import get_car_manager, get_car_pool_manager, get_client_manager, get_redis_stream_client
 
 logger = logging.getLogger(__name__)
 ws_router = APIRouter()
@@ -17,6 +18,7 @@ async def car(
     car_id: str,
     car_manager: Annotated[WebsocketManager, Depends(get_car_manager)],
     car_pool_manager: Annotated[CarPoolManager, Depends(get_car_pool_manager)],
+    stream_client: Annotated[Redis, Depends(get_redis_stream_client)],
     client_manager: Annotated[WebsocketManager, Depends(get_client_manager)],
 ) -> None:
     await car_manager.connect(websocket, car_id)
@@ -27,6 +29,8 @@ async def car(
                 continue
             client_telemetry = repack(telemetry, ClientTelemetry)
             await client_manager.send(client_id, client_telemetry)
+            await stream_client.publish(car_id, client_telemetry.pack())
+
     except WebSocketDisconnect:
         car_manager.disconnect(car_id)
 
