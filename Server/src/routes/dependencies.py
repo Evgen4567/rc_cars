@@ -1,4 +1,5 @@
 import asyncio
+import os
 from collections.abc import AsyncGenerator, Callable, Coroutine
 from contextlib import asynccontextmanager
 
@@ -10,7 +11,7 @@ from src.managers import CarPoolManager, WebsocketManager
 car_manager = WebsocketManager()
 client_manager = WebsocketManager()
 car_pool_manager = CarPoolManager(sleep_update_cars_seconds=1.0)
-redis_client = Redis()
+redis_client = Redis(host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", "6379")))
 background_tasks = set()
 
 
