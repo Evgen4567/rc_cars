@@ -25,11 +25,11 @@ async def car(
     try:
         while True:
             telemetry = await car_manager.receive(car_id, CarTelemetry)
+            client_telemetry = repack(telemetry, ClientTelemetry)
+            await stream_client.publish(car_id, client_telemetry.pack())
             if not (client_id := car_pool_manager.car_owner_pool.get(car_id)):
                 continue
-            client_telemetry = repack(telemetry, ClientTelemetry)
             await client_manager.send(client_id, client_telemetry)
-            await stream_client.publish(car_id, client_telemetry.pack())
 
     except WebSocketDisconnect:
         car_manager.disconnect(car_id)

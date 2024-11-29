@@ -40,6 +40,14 @@
     </div>
     <p>Use W, A, S, D to control the car.</p>
     <script>
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                clientName: params.get('clientId'),
+                carId: params.get('carId')
+            };
+        }
+
         const canvas = document.getElementById('videoCanvas');
         const ctx = canvas.getContext('2d');
         const carNameElem = document.getElementById('carName');
@@ -47,7 +55,10 @@
         const speedElem = document.getElementById('speedLevel');
         const powerElem = document.getElementById('powerLevel');
 
-        const socket = new WebSocket('ws://127.0.0.1:8000/client/fake_client/car_8078');
+        const { clientName, carId } = getQueryParams();
+        //const socket = new WebSocket(`ws://127.0.0.1:8000/client/${clientName}/${carId}`);
+        const socket = new WebSocket(`${window.location.origin.replace(/^http/, 'ws')}/client/${clientName}/${carId}`);
+
 
         // Control states
         const controls = {

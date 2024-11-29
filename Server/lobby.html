@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Lobby</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .carousel {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+        .car {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+            background-color: #fff;
+            border-radius: 5px;
+            min-width: 320px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        canvas {
+            width: 300px;
+            height: 200px;
+            background-color: #000;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .status-free {
+            color: green;
+        }
+        .status-occupied {
+            color: red;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .modal input {
+            width: 90%;
+            padding: 8px;
+            margin: 10px 0;
+        }
+        .modal button {
+            width: 100%;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Car Lobby</h1>
+    <div id="lobby"></div>
+    <div class="carousel" id="carousel"></div>
+    <div id="clientIdModal" class="modal">
+        <div class="modal-content">
+            <h2>Введите ваш clientId</h2>
+            <input type="text" id="clientIdInput" placeholder="Client ID">
+            <button id="saveClientIdBtn">Сохранить</button>
+        </div>
+    </div>
+
+    <script>
+        const apiBaseUrl = 'http://127.0.0.1:8000'; // Базовый URL API
+        let clientId = localStorage.getItem('clientId');
+
+        // Отображение модального окна
+        function showClientIdModal() {
+            const modal = document.getElementById('clientIdModal');
+            modal.style.display = 'block';
+        }
+
+        // Скрытие модального окна
+        function hideClientIdModal() {
+            const modal = document.getElementById('clientIdModal');
+            modal.style.display = 'none';
+        }
+
+        // Проверка наличия clientId
+        if (!clientId) {
+            showClientIdModal();
+        } else {
+            initializeApp(clientId);
+        }
+
+        // Обработчик сохранения clientId
+        document.getElementById('saveClientIdBtn').addEventListener('click', () => {
+            const input = document.getElementById('clientIdInput').value.trim();
+            if (input) {
+                clientId = input;
+                localStorage.setItem('clientId', clientId);
+                hideClientIdModal();
+                initializeApp(clientId);
+            } else {
+                alert('Пожалуйста, введите clientId.');
+            }
+        });
+
+        // Инициализация приложения
+        function initializeApp(clientId) {
+            console.log(`clientId: ${clientId}`);
+            document.getElementById('lobby').innerHTML = `<h2>Добро пожаловать, ${clientId}</h2>`;
+            startFetchingCarPool();
+        }
+
+        // Функция для периодического получения данных с /car_pool
+        function startFetchingCarPool() {
+            const fetchInterval = 5000; // 5 секунд
+            fetchCarPool(); // Первый вызов сразу
+            setInterval(fetchCarPool, fetchInterval);
+        }
+
+        // Объект для хранения текущих подключений потоков
+        const carStreams = {};
+
+        // Функция для получения данных с /car_pool
+        async function fetchCarPool() {
+            try {
+                const response = await fetch(`${apiBaseUrl}/car_pool`);
+                if (!response.ok) {
+                    throw new Error(`Ошибка HTTP: ${response.status}`);
+                }
+                const data = await response.json();
+                updateCarousel(data);
+            } catch (error) {
+                console.error('Ошибка при получении car_pool:', error);
+            }
+        }
+
+        // Функция для обновления карусели на основе данных car_pool
+        function updateCarousel(carPoolData) {
+            const carousel = document.getElementById('carousel');
+            carousel.innerHTML = ''; // Очистка карусели
+
+            Object.entries(carPoolData).forEach(([carId, status], index) => {
+                const carDiv = document.createElement('div');
+                carDiv.className = 'car';
+                carDiv.id = `car-${carId}`;
+
+                // Создание canvas для видеопотока
+                const canvas = document.createElement('canvas');
+                canvas.width = 300;
+                canvas.height = 200;
+                carDiv.appendChild(canvas);
+                const ctx = canvas.getContext('2d');
+
+                // Информация о машине
+                const carInfo = document.createElement('div');
+                carInfo.innerHTML = `<p>${carId}</p>`;
+                const statusP = document.createElement('p');
+                statusP.className = 'status';
+                if (status === null) {
+                    statusP.classList.add('status-free');
+                    statusP.textContent = 'Статус: Свободна';
+                } else {
+                    statusP.classList.add('status-occupied');
+                    statusP.textContent = `Статус: Занята (${status})`;
+                }
+                carInfo.appendChild(statusP);
+                carDiv.appendChild(carInfo);
+
+                // Кнопка для входа в комнату управления, если машинка свободна
+                if (status === null) {
+                    const button = document.createElement('button');
+                    button.textContent = 'Войти в комнату управления';
+                    button.onclick = () => joinManagementRoom(carId);
+                    carDiv.appendChild(button);
+
+                    // Начать трансляцию, если еще не подключены
+                    if (!carStreams[carId]) {
+                        startCarStream(carId, ctx, canvas);
+                    }
+                } else {
+                    // Если машинка занята и поток уже существует, остановить его
+                    if (carStreams[carId]) {
+                        stopCarStream(carId);
+                        // Очистить canvas
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                }
+
+                carousel.appendChild(carDiv);
+            });
+
+            // Если нет машинок, показать сообщение
+            if (Object.keys(carPoolData).length === 0) {
+                carousel.innerHTML = `<div class="car"><p>Нет доступных машинок.</p></div>`;
+            }
+        }
+
+        // Функция для начала трансляции данных для конкретной машинки
+        async function startCarStream(carId, ctx, canvas) {
+            const url = `${apiBaseUrl}/observer/${carId}`;
+            console.log(`Подключение к потоку: ${url}`);
+
+            const abortController = new AbortController();
+            const signal = abortController.signal;
+
+            // Сохраняем контроллер для возможности прерывания
+            carStreams[carId] = abortController;
+
+            try {
+                const response = await fetch(url, { method: 'GET', signal });
+                if (!response.ok) {
+                    throw new Error(`Ошибка HTTP: ${response.status}`);
+                }
+                if (!response.body) {
+                    throw new Error('ReadableStream не поддерживается этим браузером.');
+                }
+
+                const reader = response.body.getReader();
+                let buffer = new Uint8Array();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log(`Поток для ${carId} завершен.`);
+                        break;
+                    }
+
+                    // Добавление новых данных к буферу
+                    buffer = concatUint8Arrays(buffer, value);
+
+                    // Поиск JPEG-фреймов в буфере
+                    const { frames, remaining } = findJpegFrames(buffer);
+                    buffer = remaining;
+
+                    console.log(`Поток ${carId}: Найдено ${frames.length} фреймов. Оставшиеся байты: ${remaining.length}`);
+
+                    if (frames.length === 0) {
+                        // Если фреймы не найдены, продолжаем чтение
+                        continue;
+                    }
+
+                    for (const frameBytes of frames) {
+                        const blob = new Blob([frameBytes], { type: 'image/jpeg' });
+                        const img = new Image();
+                        const imgUrl = URL.createObjectURL(blob);
+                        img.src = imgUrl;
+                        img.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            URL.revokeObjectURL(imgUrl);
+                        };
+                        img.onerror = (err) => {
+                            console.error(`Ошибка загрузки изображения для ${carId}:`, err);
+                        };
+                    }
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log(`Поток для ${carId} был прерван.`);
+                } else {
+                    console.error(`Ошибка подключения к ${carId}:`, error);
+                    // Попытка повторного подключения через некоторое время
+                    setTimeout(() => {
+                        if (carStreams[carId]) {
+                            delete carStreams[carId];
+                        }
+                        startCarStream(carId, ctx, canvas);
+                    }, 5000); // Повтор через 5 секунд
+                }
+            } finally {
+                // Удаляем контроллер из carStreams
+                delete carStreams[carId];
+            }
+        }
+
+        // Функция для остановки трансляции данных для конкретной машинки
+        function stopCarStream(carId) {
+            const controller = carStreams[carId];
+            if (controller) {
+                controller.abort();
+                delete carStreams[carId];
+                console.log(`Поток для ${carId} остановлен.`);
+            }
+        }
+
+        // Функция для объединения двух Uint8Array
+        function concatUint8Arrays(a, b) {
+            const c = new Uint8Array(a.length + b.length);
+            c.set(a, 0);
+            c.set(b, a.length);
+            return c;
+        }
+
+        // Функция для поиска JPEG-фреймов в буфере
+        function findJpegFrames(buffer) {
+            const START_MARKER = [0xFF, 0xD8];
+            const END_MARKER = [0xFF, 0xD9];
+            const frames = [];
+            let start = -1;
+
+            for (let i = 0; i < buffer.length - 1; i++) {
+                // Поиск начала фрейма
+                if (buffer[i] === START_MARKER[0] && buffer[i + 1] === START_MARKER[1]) {
+                    if (start === -1) {
+                        start = i;
+                        console.log(`Фрейм начинается с байта ${i}`);
+                    }
+                }
+                // Поиск конца фрейма
+                if (buffer[i] === END_MARKER[0] && buffer[i + 1] === END_MARKER[1] && start !== -1) {
+                    const end = i + 2; // Включаем маркер конца
+                    const frame = buffer.slice(start, end);
+                    frames.push(frame);
+                    console.log(`Фрейм завершен на байте ${end}, размер: ${frame.length} байт`);
+                    start = -1; // Сбросить поиск
+                }
+            }
+
+            // Найти индекс последнего полного фрейма
+            let lastFrameEnd = -1;
+            for (let i = buffer.length - 2; i >= 0; i--) {
+                if (buffer[i] === END_MARKER[0] && buffer[i + 1] === END_MARKER[1]) {
+                    lastFrameEnd = i + 2;
+                    break;
+                }
+            }
+
+            // Определить оставшиеся байты после последнего полного фрейма
+            let remaining = buffer;
+            if (lastFrameEnd !== -1) {
+                remaining = buffer.slice(lastFrameEnd);
+                console.log(`Оставшиеся байты после последнего полного фрейма: ${remaining.length}`);
+            }
+
+            return { frames, remaining };
+        }
+
+        // Функция для входа в комнату управления
+        function joinManagementRoom(carId) {
+            const managementUrl = `client?clientId=${encodeURIComponent(clientId)}&carId=${encodeURIComponent(carId)}`;
+            window.location.href = managementUrl;
+        }
+
+        // Закрытие модального окна при клике вне его (не используется)
+        window.onclick = function(event) {
+            const modal = document.getElementById('clientIdModal');
+            if (event.target == modal) {
+                // Не закрываем модальное окно при клике вне его
+            }
+        }
+    </script>
+</body>
+</html>
