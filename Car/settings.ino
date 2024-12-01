@@ -29,8 +29,25 @@ void settingsInit() {
   Serial.println(WiFi.softAPIP());
 }
 
+
+bool flagLed = false;
+
+
 void settingsTick() {
   if (WiFi.getMode() == WIFI_AP_STA) {
-    sett.tick();  
+    sett.tick();
+
+
+    static unsigned long lastshow = 0;
+    if (millis() - lastshow > 1000) {
+      if (!flagLed) {
+        analogWrite(4, LOW);
+        flagLed = true;
+      } else {
+        analogWrite(4, HIGH);
+        flagLed = false;
+      }
+      lastshow = millis();
+    }
   }
 }

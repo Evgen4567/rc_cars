@@ -26,6 +26,9 @@ unsigned long flash = 0;     // Время между импульсами
 float RPM = 0;
 float r_speed = 0;
 
+const float R1 = 20000.0; // сопротивление R1 (в омах)
+const float R2 = 6800.0;  // сопротивление R2 (в омах)
+
 WebSocketsClient webSocket;
 
 struct Data {
@@ -51,6 +54,8 @@ void setup() {
   Wire.begin(14, 15); // SDA, SCL 
   pcf.begin();
 
+  pinMode(4, OUTPUT);
+  pinMode(2, INPUT);
   pinMode(PIN_ENA, OUTPUT);
   pinMode(PIN_ENB, OUTPUT);
   
@@ -80,6 +85,10 @@ void setup() {
 }
 
 void sendFrame() {
+    if (WiFi.getMode() != WIFI_STA) {
+      return;
+    }
+  
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) {
       Serial.println("Ошибка получения кадра!");
@@ -118,12 +127,13 @@ void sendFrame() {
 
 
 static unsigned long startTime = 0;
+static unsigned long lastshow = 0;
 void loop() {
   settingsTick();
   webSocketsTick();    
   sendFrame();
 
-  static int lastState = HIGH;
+  /*static int lastState = HIGH;
   int currentState = pcf.read(1);
 
   if (currentState == LOW && lastState == HIGH) {
@@ -141,9 +151,15 @@ void loop() {
     r_speed = (float) 2 * 3.1415 * r / 100 / rev_time * 3.6;
   }
 
-  static unsigned long lastshow = 0;
   if (millis() - lastshow > 500) {
     Serial.println(String("RPM: ") + String(RPM) + String(" SPEED: ") + String(r_speed));
     lastshow = millis();
-  }
+
+    int raw = analogRead(2);
+    float voltage = raw * 3.3 / 4095.0; // Преобразуем в вольты
+    float batteryVoltage = voltage * (R1 + R2) / R2; // Вычисляем напряжение батареи
+    
+    Serial.print("Battery Voltage: " + String(raw) + " - ");
+    Serial.println(batteryVoltage); // Вывод напряжения батареи
+  }*/
 }
