@@ -40,6 +40,8 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
           pcf.write(3, HIGH);
         } else if (!direction) {
           analogWrite(PIN_ENA, 0);
+          pcf.write(4, LOW);
+          pcf.write(3, LOW);
         }
       } else {
         Serial.println("Invalid payload length!");
